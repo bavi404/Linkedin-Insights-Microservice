@@ -1,10 +1,10 @@
 """
 Insights endpoints
-CRUD operations for insights
+Async CRUD operations for insights
 """
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from linkedin_insights.db.base import get_db
 from linkedin_insights.schemas.insight import (
@@ -19,14 +19,14 @@ router = APIRouter()
 
 
 @router.get("/", response_model=InsightListResponse)
-def get_insights(
+async def get_insights(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get all insights with pagination"""
     service = InsightService(db)
-    insights = service.get_insights(skip=skip, limit=limit)
+    insights = await service.get_insights(skip=skip, limit=limit)
     return {
         "items": insights,
         "total": len(insights),
@@ -36,13 +36,13 @@ def get_insights(
 
 
 @router.get("/{insight_id}", response_model=InsightResponse)
-def get_insight(
+async def get_insight(
     insight_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Get insight by ID"""
     service = InsightService(db)
-    insight = service.get_insight(insight_id)
+    insight = await service.get_insight(insight_id)
     if not insight:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -52,24 +52,24 @@ def get_insight(
 
 
 @router.post("/", response_model=InsightResponse, status_code=status.HTTP_201_CREATED)
-def create_insight(
+async def create_insight(
     insight_data: InsightCreate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Create new insight"""
     service = InsightService(db)
-    return service.create_insight(insight_data)
+    return await service.create_insight(insight_data)
 
 
 @router.put("/{insight_id}", response_model=InsightResponse)
-def update_insight(
+async def update_insight(
     insight_id: int,
     insight_data: InsightUpdate,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Update existing insight"""
     service = InsightService(db)
-    insight = service.update_insight(insight_id, insight_data)
+    insight = await service.update_insight(insight_id, insight_data)
     if not insight:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -79,15 +79,14 @@ def update_insight(
 
 
 @router.delete("/{insight_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_insight(
+async def delete_insight(
     insight_id: int,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Delete insight"""
     service = InsightService(db)
-    if not service.delete_insight(insight_id):
+    if not await service.delete_insight(insight_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Insight not found"
         )
-

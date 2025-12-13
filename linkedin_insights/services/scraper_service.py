@@ -1,56 +1,40 @@
 """
-Scraper service
-Business logic for LinkedIn scraping operations
+Scraper Service Wrapper
+Async wrapper for Playwright scraper
 """
-from typing import Optional
-from sqlalchemy.orm import Session
+import logging
+from typing import Dict, Any
 
-from linkedin_insights.models.insight import Insight, ScraperRun
-from linkedin_insights.schemas.scraper import ScrapeRequest
-from linkedin_insights.scraper.linkedin_scraper import LinkedInScraper
-from linkedin_insights.services.insight_service import InsightService
+from linkedin_insights.scraper.page_scraper import LinkedInPageScraper
+
+logger = logging.getLogger(__name__)
 
 
 class ScraperService:
-    """Service for scraper business logic"""
+    """Async service wrapper for LinkedIn page scraper"""
     
-    def __init__(self, db: Session):
-        self.db = db
-        self.insight_service = InsightService(db)
-        self.scraper = LinkedInScraper()
+    def __init__(self):
+        self.scraper = LinkedInPageScraper()
     
-    def scrape_profile(self, request: ScrapeRequest) -> dict:
-        """Scrape LinkedIn profile and save insight"""
-        # Create scraper run record
-        scraper_run = ScraperRun(
-            insight_id=0,  # Will be updated after insight creation
-            status="running"
-        )
-        self.db.add(scraper_run)
-        self.db.commit()
+    async def scrape_linkedin_page(self, page_id: str) -> Dict[str, Any]:
+        """
+        Scrape LinkedIn page (async)
         
+        Args:
+            page_id: Last part of LinkedIn company URL
+        
+        Returns:
+            Dictionary with page info, posts, comments, and employees
+        """
         try:
-            # Scrape profile
-            scraped_data = self.scraper.scrape(str(request.profile_url))
-            
-            # Create or update insight
-            insight = self.insight_service.create_insight(
-                scraped_data
-            )
-            
-            # Update scraper run
-            scraper_run.insight_id = insight.id
-            scraper_run.status = "completed"
-            self.db.commit()
-            
-            return {
-                "insight_id": insight.id,
-                "status": "success",
-                "message": "Profile scraped successfully"
-            }
+            return await self.scraper.scrape_page(page_id)
         except Exception as e:
-            scraper_run.status = "failed"
-            scraper_run.error_message = str(e)
-            self.db.commit()
-            raise
-
+            logger.error(f"Error in scraper service: {str(e)}", exc_info=True)
+            return {
+                'error': True,
+                'error_message': str(e),
+                'page_info': None,
+                'posts': [],
+                'employees': [],
+                'scraped_at': None
+            }

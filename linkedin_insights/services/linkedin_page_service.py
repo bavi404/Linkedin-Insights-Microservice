@@ -1,12 +1,12 @@
 """
 LinkedIn Page Service
-Service layer for processing and persisting scraped LinkedIn page data
+Async service layer for processing and persisting scraped LinkedIn page data
 Follows SOLID principles and repository pattern
 """
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from linkedin_insights.db.repositories import (
@@ -28,18 +28,20 @@ logger = logging.getLogger(__name__)
 
 class LinkedInPageService:
     """
-    Service for processing scraped LinkedIn page data
+    Async service for processing scraped LinkedIn page data
     Handles upsert operations with transactions and duplicate prevention
     """
     
-    def __init__(self, db: Session):
+    def __init__(self, db: AsyncSession):
         self.db = db
         self.page_repo = LinkedInPageRepository(LinkedInPage, db)
         self.post_repo = PostRepository(Post, db)
         self.comment_repo = CommentRepository(Comment, db)
         self.user_repo = SocialMediaUserRepository(SocialMediaUser, db)
+        # Optional AI summary service
+        self.ai_summary_service = AISummaryService()
     
-    def process_scraped_data(self, scraped_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_scraped_data(self, scraped_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process and persist scraped LinkedIn page data
         
@@ -63,18 +65,18 @@ class LinkedInPageService:
             if not page_info:
                 raise ValueError("page_info is required in scraped_data")
             
-            page = self._upsert_page(page_info)
+            page = await self._upsert_page(page_info)
             
             # Process posts and comments
             posts_data = scraped_data.get('posts', [])
-            posts_processed = self._process_posts(posts_data, page.id)
+            posts_processed = await self._process_posts(posts_data, page.id)
             
             # Process employees
             employees_data = scraped_data.get('employees', [])
-            employees_processed = self._process_employees(employees_data, page.id)
+            employees_processed = await self._process_employees(employees_data, page.id)
             
             # Final commit for any remaining changes
-            self.db.commit()
+            await self.db.commit()
             
             logger.info(
                 f"Successfully processed page {page.page_id}: "
@@ -91,7 +93,7 @@ class LinkedInPageService:
             }
         
         except IntegrityError as e:
-            self.db.rollback()
+            await self.db.rollback()
             logger.error(f"Integrity error processing scraped data: {str(e)}")
             return {
                 'success': False,
@@ -100,7 +102,7 @@ class LinkedInPageService:
             }
         
         except SQLAlchemyError as e:
-            self.db.rollback()
+            await self.db.rollback()
             logger.error(f"Database error processing scraped data: {str(e)}")
             return {
                 'success': False,
@@ -109,7 +111,7 @@ class LinkedInPageService:
             }
         
         except Exception as e:
-            self.db.rollback()
+            await self.db.rollback()
             logger.error(f"Unexpected error processing scraped data: {str(e)}", exc_info=True)
             return {
                 'success': False,
@@ -117,7 +119,7 @@ class LinkedInPageService:
                 'page_id': None
             }
     
-    def _upsert_page(self, page_info: Dict[str, Any]) -> LinkedInPage:
+    async def _upsert_page(self, page_info: Dict[str, Any]) -> LinkedInPage:
         """
         Upsert page information
         Handles duplicate prevention using unique constraints
@@ -141,16 +143,16 @@ class LinkedInPageService:
             # Remove None values to avoid overwriting with None
             page_data = {k: v for k, v in page_data.items() if v is not None}
             
-            page = self.page_repo.upsert(page_data)
+            page = await self.page_repo.upsert(page_data)
             logger.debug(f"Upserted page: {page.page_id} (ID: {page.id})")
             return page
         
         except IntegrityError as e:
-            self.db.rollback()
+            await self.db.rollback()
             logger.error(f"Integrity error upserting page: {str(e)}")
             raise
     
-    def _process_posts(self, posts_data: List[Dict[str, Any]], page_id: int) -> List[Any]:
+    async def _process_posts(self, posts_data: List[Dict[str, Any]], page_id: int) -> List[Any]:
         """
         Process posts and their comments
         Uses batch upsert for efficiency
@@ -194,15 +196,15 @@ class LinkedInPageService:
                 post_dict = {k: v for k, v in post_dict.items() if v is not None}
                 
                 # Upsert post
-                post = self.post_repo.upsert(post_dict, page_id)
+                post = await self.post_repo.upsert(post_dict, page_id)
                 processed_posts.append(post)
                 
                 # Process comments for this post
                 if comments_data:
-                    self._process_comments(comments_data, post.id)
+                    await self._process_comments(comments_data, post.id)
             
             except IntegrityError as e:
-                self.db.rollback()
+                await self.db.rollback()
                 logger.warning(f"Integrity error processing post {post_data.get('post_id')}: {str(e)}")
                 # Retry once
                 try:
@@ -220,10 +222,10 @@ class LinkedInPageService:
                             posted_at = datetime.utcnow()
                     post_dict['posted_at'] = posted_at or datetime.utcnow()
                     post_dict = {k: v for k, v in post_dict.items() if v is not None}
-                    post = self.post_repo.upsert(post_dict, page_id)
+                    post = await self.post_repo.upsert(post_dict, page_id)
                     processed_posts.append(post)
                     if comments_data:
-                        self._process_comments(comments_data, post.id)
+                        await self._process_comments(comments_data, post.id)
                 except Exception as retry_e:
                     logger.error(f"Retry failed for post {post_data.get('post_id')}: {str(retry_e)}")
                     continue
@@ -234,7 +236,7 @@ class LinkedInPageService:
         
         return processed_posts
     
-    def _process_comments(self, comments_data: List[Dict[str, Any]], post_id: int) -> List[Any]:
+    async def _process_comments(self, comments_data: List[Dict[str, Any]], post_id: int) -> List[Any]:
         """
         Process comments for a post
         Uses batch upsert for efficiency
@@ -269,11 +271,11 @@ class LinkedInPageService:
                 comment_dict = {k: v for k, v in comment_dict.items() if v is not None}
                 
                 # Upsert comment
-                comment = self.comment_repo.upsert(comment_dict, post_id)
+                comment = await self.comment_repo.upsert(comment_dict, post_id)
                 processed_comments.append(comment)
             
             except IntegrityError as e:
-                self.db.rollback()
+                await self.db.rollback()
                 logger.warning(f"Integrity error processing comment {comment_data.get('comment_id')}: {str(e)}")
                 # Retry once
                 try:
@@ -290,7 +292,7 @@ class LinkedInPageService:
                             created_at = datetime.utcnow()
                     comment_dict['created_at'] = created_at or datetime.utcnow()
                     comment_dict = {k: v for k, v in comment_dict.items() if v is not None}
-                    comment = self.comment_repo.upsert(comment_dict, post_id)
+                    comment = await self.comment_repo.upsert(comment_dict, post_id)
                     processed_comments.append(comment)
                 except Exception as retry_e:
                     logger.error(f"Retry failed for comment {comment_data.get('comment_id')}: {str(retry_e)}")
@@ -302,7 +304,7 @@ class LinkedInPageService:
         
         return processed_comments
     
-    def _process_employees(self, employees_data: List[Dict[str, Any]], page_id: int) -> List[Any]:
+    async def _process_employees(self, employees_data: List[Dict[str, Any]], page_id: int) -> List[Any]:
         """
         Process employees/users
         Uses batch upsert for efficiency
@@ -326,11 +328,11 @@ class LinkedInPageService:
                 user_dict = {k: v for k, v in user_dict.items() if v is not None}
                 
                 # Upsert user (unique constraint on linkedin_user_id + page_id)
-                user = self.user_repo.upsert(user_dict, page_id)
+                user = await self.user_repo.upsert(user_dict, page_id)
                 processed_employees.append(user)
             
             except IntegrityError as e:
-                self.db.rollback()
+                await self.db.rollback()
                 logger.warning(f"Integrity error processing employee {employee_data.get('linkedin_user_id')}: {str(e)}")
                 # Retry once
                 try:
@@ -341,7 +343,7 @@ class LinkedInPageService:
                         'profile_url': employee_data.get('profile_url'),
                     }
                     user_dict = {k: v for k, v in user_dict.items() if v is not None}
-                    user = self.user_repo.upsert(user_dict, page_id)
+                    user = await self.user_repo.upsert(user_dict, page_id)
                     processed_employees.append(user)
                 except Exception as retry_e:
                     logger.error(f"Retry failed for employee {employee_data.get('linkedin_user_id')}: {str(retry_e)}")
@@ -353,19 +355,19 @@ class LinkedInPageService:
         
         return processed_employees
     
-    def get_page_by_page_id(self, page_id: str) -> Optional[LinkedInPage]:
+    async def get_page_by_page_id(self, page_id: str) -> Optional[LinkedInPage]:
         """Get page by LinkedIn page_id"""
-        return self.page_repo.get_by_page_id(page_id)
+        return await self.page_repo.get_by_page_id(page_id)
     
-    def get_page_with_relations(self, page_id: str) -> Optional[Dict[str, Any]]:
+    async def get_page_with_relations(self, page_id: str) -> Optional[Dict[str, Any]]:
         """Get page with all related data"""
-        page = self.page_repo.get_by_page_id(page_id)
+        page = await self.page_repo.get_by_page_id(page_id)
         if not page:
             return None
         
         # Load related data
-        posts = self.post_repo.get_by_page_id(page.id)
-        employees = self.user_repo.get_by_page_id(page.id)
+        posts = await self.post_repo.get_by_page_id(page.id)
+        employees = await self.user_repo.get_by_page_id(page.id)
         
         return {
             'page': page,
@@ -373,7 +375,7 @@ class LinkedInPageService:
             'employees': employees
         }
     
-    def generate_ai_summary(self, page_id: str) -> Optional[Dict[str, Any]]:
+    async def generate_ai_summary(self, page_id: str) -> Optional[Dict[str, Any]]:
         """
         Generate AI summary for a LinkedIn page
         
@@ -383,12 +385,12 @@ class LinkedInPageService:
         Returns:
             AI summary dictionary or None if service is disabled
         """
-        page = self.page_repo.get_by_page_id(page_id)
+        page = await self.page_repo.get_by_page_id(page_id)
         if not page:
             return None
         
         # Get posts for engagement metrics
-        posts = self.post_repo.get_by_page_id(page.id, limit=100)
+        posts = await self.post_repo.get_by_page_id(page.id, limit=100)
         
         # Calculate engagement metrics
         total_posts = len(posts)
@@ -418,4 +420,3 @@ class LinkedInPageService:
         
         # Generate AI summary
         return self.ai_summary_service.generate_summary(page_stats)
-

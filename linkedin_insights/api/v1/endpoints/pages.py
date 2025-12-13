@@ -1,11 +1,12 @@
 """
 LinkedIn Pages endpoints
-Endpoints for LinkedIn company pages
+Async endpoints for LinkedIn company pages
 """
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from linkedin_insights.db.base import get_db
 from linkedin_insights.db.repositories import LinkedInPageRepository, PostRepository, SocialMediaUserRepository
@@ -33,7 +34,7 @@ router = APIRouter()
 @router.get("/{page_id}", response_model=LinkedInPageResponse, status_code=status.HTTP_200_OK)
 async def get_page(
     page_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get LinkedIn page by page_id
@@ -44,7 +45,7 @@ async def get_page(
     page_repo = LinkedInPageRepository(LinkedInPage, db)
     
     # Check if page exists in DB
-    page = page_repo.get_by_page_id(page_id)
+    page = await page_repo.get_by_page_id(page_id)
     
     if page:
         logger.info(f"Page {page_id} found in database")
@@ -65,7 +66,7 @@ async def get_page(
         
         # Process and store scraped data
         service = LinkedInPageService(db)
-        result = service.process_scraped_data(scraped_data)
+        result = await service.process_scraped_data(scraped_data)
         
         if not result.get('success'):
             raise HTTPException(
@@ -74,7 +75,7 @@ async def get_page(
             )
         
         # Fetch the newly created/updated page
-        page = page_repo.get_by_page_id(page_id)
+        page = await page_repo.get_by_page_id(page_id)
         if not page:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -95,13 +96,13 @@ async def get_page(
 
 
 @router.get("", response_model=PaginatedLinkedInPageResponse, status_code=status.HTTP_200_OK)
-def get_pages(
+async def get_pages(
     pagination: PaginationParams = Depends(get_pagination_dependency),
     follower_count_min: Optional[int] = Query(None, ge=0, description="Minimum follower count"),
     follower_count_max: Optional[int] = Query(None, ge=0, description="Maximum follower count"),
     industry: Optional[str] = Query(None, description="Filter by industry"),
     page_name: Optional[str] = Query(None, description="Filter by page name (partial match)"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get list of LinkedIn pages with filters
@@ -113,33 +114,33 @@ def get_pages(
     - page_name: Partial match on page name
     """
     # Build query with filters
-    query = db.query(LinkedInPage)
+    query = select(LinkedInPage)
     
     # Apply filters
     if follower_count_min is not None:
-        query = query.filter(LinkedInPage.total_followers >= follower_count_min)
+        query = query.where(LinkedInPage.total_followers >= follower_count_min)
     
     if follower_count_max is not None:
-        query = query.filter(LinkedInPage.total_followers <= follower_count_max)
+        query = query.where(LinkedInPage.total_followers <= follower_count_max)
     
     if industry:
-        query = query.filter(LinkedInPage.industry.ilike(f"%{industry}%"))
+        query = query.where(LinkedInPage.industry.ilike(f"%{industry}%"))
     
     if page_name:
-        query = query.filter(LinkedInPage.name.ilike(f"%{page_name}%"))
+        query = query.where(LinkedInPage.name.ilike(f"%{page_name}%"))
     
     # Use pagination utility
-    result = paginate_query(query, pagination.page, pagination.page_size)
+    result = await paginate_query(query, db, pagination.page, pagination.page_size)
     
     return result.to_dict()
 
 
 @router.get("/{page_id}/posts", response_model=PaginatedPostResponse, status_code=status.HTTP_200_OK)
-def get_page_posts(
+async def get_page_posts(
     page_id: str,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(15, ge=1, le=50, description="Items per page"),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get posts for a LinkedIn page
@@ -149,7 +150,7 @@ def get_page_posts(
     page_repo = LinkedInPageRepository(LinkedInPage, db)
     
     # Get page by page_id
-    linkedin_page = page_repo.get_by_page_id(page_id)
+    linkedin_page = await page_repo.get_by_page_id(page_id)
     if not linkedin_page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -157,12 +158,13 @@ def get_page_posts(
         )
     
     # Get posts for this page with ordering
-    query = db.query(Post).filter(Post.page_id == linkedin_page.id)
+    query = select(Post).where(Post.page_id == linkedin_page.id)
     
     # Use pagination utility with ordering
     pagination = PaginationParams(page=page, page_size=page_size)
-    result = paginate_query_with_filters(
+    result = await paginate_query_with_filters(
         query, 
+        db,
         pagination, 
         order_by=Post.posted_at.desc()
     )
@@ -171,10 +173,10 @@ def get_page_posts(
 
 
 @router.get("/{page_id}/followers", response_model=PaginatedSocialMediaUserResponse, status_code=status.HTTP_200_OK)
-def get_page_followers(
+async def get_page_followers(
     page_id: str,
     pagination: PaginationParams = Depends(get_pagination_dependency),
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Get employees/followers for a LinkedIn page
@@ -184,7 +186,7 @@ def get_page_followers(
     page_repo = LinkedInPageRepository(LinkedInPage, db)
     
     # Get page by page_id
-    linkedin_page = page_repo.get_by_page_id(page_id)
+    linkedin_page = await page_repo.get_by_page_id(page_id)
     if not linkedin_page:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -192,10 +194,9 @@ def get_page_followers(
         )
     
     # Get users/employees for this page
-    query = db.query(SocialMediaUser).filter(SocialMediaUser.page_id == linkedin_page.id)
+    query = select(SocialMediaUser).where(SocialMediaUser.page_id == linkedin_page.id)
     
     # Use pagination utility
-    result = paginate_query(query, pagination.page, pagination.page_size)
+    result = await paginate_query(query, db, pagination.page, pagination.page_size)
     
     return result.to_dict()
-

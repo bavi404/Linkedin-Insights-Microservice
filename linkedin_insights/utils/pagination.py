@@ -4,8 +4,8 @@ Reusable pagination helpers for SQLAlchemy queries
 """
 from typing import TypeVar, Generic, List, Dict, Any, Optional
 from fastapi import Query
-from sqlalchemy.orm import Query as SQLAlchemyQuery
-from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from linkedin_insights.schemas.linkedin import PaginatedResponseBase
 
@@ -79,16 +79,18 @@ class PaginationResult(Generic[T]):
         }
 
 
-def paginate_query(
-    query: SQLAlchemyQuery,
+async def paginate_query(
+    query: select,
+    db: AsyncSession,
     page: int = 1,
     page_size: int = 20
 ) -> PaginationResult:
     """
-    Paginate a SQLAlchemy query
+    Paginate an async SQLAlchemy query
     
     Args:
-        query: SQLAlchemy query object
+        query: SQLAlchemy select statement
+        db: AsyncSession
         page: Page number (1-indexed)
         page_size: Number of items per page
     
@@ -97,8 +99,8 @@ def paginate_query(
     
     Example:
         ```python
-        query = db.query(LinkedInPage)
-        result = paginate_query(query, page=1, page_size=20)
+        query = select(LinkedInPage)
+        result = await paginate_query(query, db, page=1, page_size=20)
         return result.to_dict()
         ```
     """
@@ -111,13 +113,17 @@ def paginate_query(
         page_size = 100
     
     # Get total count (before pagination)
-    total_count = query.count()
+    count_query = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar() or 0
     
     # Calculate skip
     skip = (page - 1) * page_size
     
     # Apply pagination
-    items = query.offset(skip).limit(page_size).all()
+    paginated_query = query.offset(skip).limit(page_size)
+    result = await db.execute(paginated_query)
+    items = list(result.scalars().all())
     
     return PaginationResult(
         items=items,
@@ -127,16 +133,18 @@ def paginate_query(
     )
 
 
-def paginate_query_with_filters(
-    query: SQLAlchemyQuery,
+async def paginate_query_with_filters(
+    query: select,
+    db: AsyncSession,
     pagination: PaginationParams,
     order_by: Optional[Any] = None
 ) -> PaginationResult:
     """
-    Paginate a SQLAlchemy query with optional ordering
+    Paginate an async SQLAlchemy query with optional ordering
     
     Args:
-        query: SQLAlchemy query object
+        query: SQLAlchemy select statement
+        db: AsyncSession
         pagination: PaginationParams instance
         order_by: Optional column to order by (e.g., Model.created_at.desc())
     
@@ -145,9 +153,9 @@ def paginate_query_with_filters(
     
     Example:
         ```python
-        query = db.query(Post).filter(Post.page_id == page_id)
+        query = select(Post).filter(Post.page_id == page_id)
         pagination = PaginationParams(page=1, page_size=15)
-        result = paginate_query_with_filters(query, pagination, order_by=Post.posted_at.desc())
+        result = await paginate_query_with_filters(query, db, pagination, order_by=Post.posted_at.desc())
         return result.to_dict()
         ```
     """
@@ -155,7 +163,7 @@ def paginate_query_with_filters(
     if order_by is not None:
         query = query.order_by(order_by)
     
-    return paginate_query(query, pagination.page, pagination.page_size)
+    return await paginate_query(query, db, pagination.page, pagination.page_size)
 
 
 def create_pagination_metadata(

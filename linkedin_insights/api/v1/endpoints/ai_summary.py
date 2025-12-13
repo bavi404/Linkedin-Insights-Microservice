@@ -1,10 +1,10 @@
 """
 AI Summary endpoints
-Optional endpoints for AI-powered page summaries
+Optional async endpoints for AI-powered page summaries
 """
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from linkedin_insights.db.base import get_db
 from linkedin_insights.schemas.ai_summary import (
@@ -30,9 +30,9 @@ router = APIRouter()
         503: {"model": AISummaryErrorResponse, "description": "AI service unavailable"},
     }
 )
-def get_page_ai_summary(
+async def get_page_ai_summary(
     page_id: str,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Generate AI-powered summary for a LinkedIn page
@@ -62,7 +62,7 @@ def get_page_ai_summary(
     page_service = LinkedInPageService(db)
     
     # Generate summary
-    summary = page_service.generate_ai_summary(page_id)
+    summary = await page_service.generate_ai_summary(page_id)
     
     if not summary:
         raise HTTPException(
@@ -85,9 +85,9 @@ def get_page_ai_summary(
         503: {"model": AISummaryErrorResponse, "description": "AI service unavailable"},
     }
 )
-def generate_summary_from_stats(
+async def generate_summary_from_stats(
     stats: PageStatsRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Generate AI summary from provided page statistics
@@ -125,4 +125,3 @@ def generate_summary_from_stats(
         )
     
     return summary
-

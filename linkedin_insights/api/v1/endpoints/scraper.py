@@ -1,9 +1,9 @@
 """
 Scraper endpoints
-Endpoints for LinkedIn profile scraping
+Async endpoints for LinkedIn profile scraping
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from linkedin_insights.db.base import get_db
 from linkedin_insights.schemas.scraper import ScrapeRequest, ScrapeResponse
@@ -13,18 +13,17 @@ router = APIRouter()
 
 
 @router.post("/scrape", response_model=ScrapeResponse, status_code=status.HTTP_202_ACCEPTED)
-def scrape_profile(
+async def scrape_profile(
     request: ScrapeRequest,
-    db: Session = Depends(get_db)
+    db: AsyncSession = Depends(get_db)
 ):
     """Scrape LinkedIn profile and create insight"""
-    service = ScraperService(db)
+    service = ScraperService()
     try:
-        result = service.scrape_profile(request)
+        result = await service.scrape_linkedin_page(str(request.profile_url))
         return ScrapeResponse(**result)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Scraping failed: {str(e)}"
         )
-
