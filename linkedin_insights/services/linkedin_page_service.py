@@ -21,6 +21,7 @@ from linkedin_insights.models.linkedin import (
     Comment,
     SocialMediaUser,
 )
+from linkedin_insights.services.ai_summary_service import AISummaryService
 
 logger = logging.getLogger(__name__)
 
@@ -371,4 +372,50 @@ class LinkedInPageService:
             'posts': posts,
             'employees': employees
         }
+    
+    def generate_ai_summary(self, page_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Generate AI summary for a LinkedIn page
+        
+        Args:
+            page_id: LinkedIn page_id
+        
+        Returns:
+            AI summary dictionary or None if service is disabled
+        """
+        page = self.page_repo.get_by_page_id(page_id)
+        if not page:
+            return None
+        
+        # Get posts for engagement metrics
+        posts = self.post_repo.get_by_page_id(page.id, limit=100)
+        
+        # Calculate engagement metrics
+        total_posts = len(posts)
+        total_likes = sum(post.like_count for post in posts) if posts else 0
+        total_comments = sum(post.comment_count for post in posts) if posts else 0
+        avg_likes = total_likes / total_posts if total_posts > 0 else 0
+        avg_comments = total_comments / total_posts if total_posts > 0 else 0
+        
+        # Calculate engagement rate (simplified: (avg_likes + avg_comments) / followers * 100)
+        engagement_rate = None
+        if page.total_followers and page.total_followers > 0:
+            engagement_rate = ((avg_likes + avg_comments) / page.total_followers) * 100
+        
+        # Prepare page stats
+        page_stats = {
+            'name': page.name,
+            'industry': page.industry,
+            'total_followers': page.total_followers,
+            'head_count': page.head_count,
+            'description': page.description,
+            'total_posts': total_posts,
+            'avg_likes': avg_likes,
+            'avg_comments': avg_comments,
+            'engagement_rate': engagement_rate,
+            'generated_at': datetime.utcnow().isoformat()
+        }
+        
+        # Generate AI summary
+        return self.ai_summary_service.generate_summary(page_stats)
 

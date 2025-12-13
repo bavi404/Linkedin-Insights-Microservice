@@ -2,6 +2,7 @@
 Configuration management using Pydantic BaseSettings
 Centralized application configuration
 """
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,11 @@ class Settings(BaseSettings):
     SCRAPER_HEADLESS: bool = True
     SCRAPER_PAGE_LOAD_TIMEOUT: int = 60000  # milliseconds
     SCRAPER_NAVIGATION_TIMEOUT: int = 30000  # milliseconds
+    
+    # AI Summary (Optional)
+    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_MAX_TOKENS: int = 300
     
     model_config = SettingsConfigDict(
         env_file=".env",

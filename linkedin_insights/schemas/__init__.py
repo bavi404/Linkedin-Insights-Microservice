@@ -13,6 +13,11 @@ from linkedin_insights.schemas.scraper import (
     ScrapeResponse,
     ScraperRunResponse,
 )
+from linkedin_insights.schemas.ai_summary import (
+    PageStatsRequest,
+    AISummaryResponse,
+    AISummaryErrorResponse,
+)
 from linkedin_insights.schemas.linkedin import (
     # Comment schemas
     CommentBase,
@@ -62,6 +67,10 @@ __all__ = [
     "ScrapeRequest",
     "ScrapeResponse",
     "ScraperRunResponse",
+    # AI Summary
+    "PageStatsRequest",
+    "AISummaryResponse",
+    "AISummaryErrorResponse",
     # Comment
     "CommentBase",
     "CommentCreate",
