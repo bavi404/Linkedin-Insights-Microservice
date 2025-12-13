@@ -1,0 +1,585 @@
+{
+	"info": {
+		"_postman_id": "linkedin-insights-api",
+		"name": "LinkedIn Insights Microservice API",
+		"description": "API collection for LinkedIn Insights Microservice\n\nBase URL: {{base_url}}\nAPI Version: v1",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "linkedin-insights"
+	},
+	"item": [
+		{
+			"name": "Pages",
+			"item": [
+				{
+					"name": "Get Page by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/pages/{{page_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"pages",
+								"{{page_id}}"
+							]
+						},
+						"description": "Get a LinkedIn page by page_id.\n\n- If page exists in DB → returns from database\n- If not → scrapes LinkedIn, stores in DB, returns response"
+					},
+					"response": [
+						{
+							"name": "Success - Page Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages/acme-corp",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages",
+										"acme-corp"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"id\": 1,\n    \"page_id\": \"acme-corp\",\n    \"name\": \"Acme Corporation\",\n    \"url\": \"https://www.linkedin.com/company/acme-corp\",\n    \"linkedin_internal_id\": \"123456\",\n    \"description\": \"Leading technology company specializing in innovative solutions.\",\n    \"website\": \"https://acme.com\",\n    \"industry\": \"Technology\",\n    \"total_followers\": 50000,\n    \"head_count\": 500,\n    \"specialities\": \"Software Development, AI, Cloud Computing\",\n    \"profile_image_url\": \"https://media.licdn.com/dms/image/example.jpg\",\n    \"created_at\": \"2024-01-15T10:00:00Z\",\n    \"updated_at\": \"2024-01-15T12:00:00Z\"\n}"
+						},
+						{
+							"name": "Error - Page Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages/non-existent",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages",
+										"non-existent"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Page not found or inaccessible: Page not found on LinkedIn\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Search Pages with Filters",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/pages?page=1&page_size=20&follower_count_min={{follower_min}}&follower_count_max={{follower_max}}&industry={{industry}}&page_name={{page_name}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"pages"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "page_size",
+									"value": "20",
+									"description": "Items per page (default: 20, max: 100)"
+								},
+								{
+									"key": "follower_count_min",
+									"value": "{{follower_min}}",
+									"description": "Minimum follower count",
+									"disabled": true
+								},
+								{
+									"key": "follower_count_max",
+									"value": "{{follower_max}}",
+									"description": "Maximum follower count",
+									"disabled": true
+								},
+								{
+									"key": "industry",
+									"value": "{{industry}}",
+									"description": "Filter by industry (partial match)",
+									"disabled": true
+								},
+								{
+									"key": "page_name",
+									"value": "{{page_name}}",
+									"description": "Filter by page name (partial match)",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Get list of LinkedIn pages with filtering and pagination.\n\n**Filters:**\n- `follower_count_min`: Minimum number of followers\n- `follower_count_max`: Maximum number of followers\n- `industry`: Filter by industry (partial match)\n- `page_name`: Filter by page name (partial match, case-insensitive)\n\n**Pagination:**\n- `page`: Page number (default: 1)\n- `page_size`: Items per page (default: 20, max: 100)"
+					},
+					"response": [
+						{
+							"name": "Success - Filtered Results",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages?page=1&page_size=20&follower_count_min=1000&industry=Technology",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "page_size",
+											"value": "20"
+										},
+										{
+											"key": "follower_count_min",
+											"value": "1000"
+										},
+										{
+											"key": "industry",
+											"value": "Technology"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"items\": [\n        {\n            \"id\": 1,\n            \"page_id\": \"acme-corp\",\n            \"name\": \"Acme Corporation\",\n            \"url\": \"https://www.linkedin.com/company/acme-corp\",\n            \"linkedin_internal_id\": \"123456\",\n            \"description\": \"Leading technology company\",\n            \"website\": \"https://acme.com\",\n            \"industry\": \"Technology\",\n            \"total_followers\": 50000,\n            \"head_count\": 500,\n            \"specialities\": \"Software Development, AI\",\n            \"profile_image_url\": \"https://media.licdn.com/dms/image/example.jpg\",\n            \"created_at\": \"2024-01-15T10:00:00Z\",\n            \"updated_at\": \"2024-01-15T12:00:00Z\"\n        },\n        {\n            \"id\": 2,\n            \"page_id\": \"tech-startup\",\n            \"name\": \"Tech Startup Inc\",\n            \"url\": \"https://www.linkedin.com/company/tech-startup\",\n            \"industry\": \"Technology\",\n            \"total_followers\": 15000,\n            \"head_count\": 50,\n            \"created_at\": \"2024-01-14T08:00:00Z\",\n            \"updated_at\": \"2024-01-14T08:00:00Z\"\n        }\n    ],\n    \"total\": 25,\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total_pages\": 2,\n    \"has_next\": true,\n    \"has_previous\": false\n}"
+						},
+						{
+							"name": "Success - No Filters",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages?page=1&page_size=10",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "page_size",
+											"value": "10"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"items\": [],\n    \"total\": 0,\n    \"page\": 1,\n    \"page_size\": 10,\n    \"total_pages\": 0,\n    \"has_next\": false,\n    \"has_previous\": false\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Page Posts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/pages/{{page_id}}/posts?page=1&page_size=15",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"pages",
+								"{{page_id}}",
+								"posts"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "page_size",
+									"value": "15",
+									"description": "Items per page (default: 15, max: 50)"
+								}
+							]
+						},
+						"description": "Get posts for a LinkedIn page.\n\nReturns recent 10-15 posts (default 15) with pagination support.\n\nPosts are ordered by `posted_at` descending (newest first)."
+					},
+					"response": [
+						{
+							"name": "Success - Posts Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages/acme-corp/posts?page=1&page_size=15",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages",
+										"acme-corp",
+										"posts"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "page_size",
+											"value": "15"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"items\": [\n        {\n            \"id\": 1,\n            \"post_id\": \"urn:li:activity:123456789\",\n            \"page_id\": 1,\n            \"content\": \"Excited to announce our new product launch! 🚀 We're revolutionizing the industry with cutting-edge technology.\",\n            \"like_count\": 1250,\n            \"comment_count\": 89,\n            \"posted_at\": \"2024-01-15T14:30:00Z\",\n            \"created_at\": \"2024-01-15T14:35:00Z\",\n            \"updated_at\": \"2024-01-15T14:35:00Z\"\n        },\n        {\n            \"id\": 2,\n            \"post_id\": \"urn:li:activity:123456788\",\n            \"page_id\": 1,\n            \"content\": \"Thank you to all our partners and customers for an amazing year! 🙏\",\n            \"like_count\": 890,\n            \"comment_count\": 45,\n            \"posted_at\": \"2024-01-14T10:00:00Z\",\n            \"created_at\": \"2024-01-14T10:05:00Z\",\n            \"updated_at\": \"2024-01-14T10:05:00Z\"\n        },\n        {\n            \"id\": 3,\n            \"post_id\": \"urn:li:activity:123456787\",\n            \"page_id\": 1,\n            \"content\": \"We're hiring! Join our amazing team of engineers. Check out our open positions.\",\n            \"like_count\": 650,\n            \"comment_count\": 120,\n            \"posted_at\": \"2024-01-13T09:00:00Z\",\n            \"created_at\": \"2024-01-13T09:05:00Z\",\n            \"updated_at\": \"2024-01-13T09:05:00Z\"\n        }\n    ],\n    \"total\": 15,\n    \"page\": 1,\n    \"page_size\": 15,\n    \"total_pages\": 1,\n    \"has_next\": false,\n    \"has_previous\": false\n}"
+						},
+						{
+							"name": "Error - Page Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages/non-existent/posts",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages",
+										"non-existent",
+										"posts"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Page with page_id 'non-existent' not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Page Followers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/pages/{{page_id}}/followers?page=1&page_size=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"pages",
+								"{{page_id}}",
+								"followers"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)"
+								},
+								{
+									"key": "page_size",
+									"value": "20",
+									"description": "Items per page (default: 20, max: 100)"
+								}
+							]
+						},
+						"description": "Get employees/followers for a LinkedIn page.\n\nReturns list of employees/followers with pagination support."
+					},
+					"response": [
+						{
+							"name": "Success - Followers Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages/acme-corp/followers?page=1&page_size=20",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages",
+										"acme-corp",
+										"followers"
+									],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "page_size",
+											"value": "20"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"items\": [\n        {\n            \"id\": 1,\n            \"linkedin_user_id\": \"john-doe\",\n            \"name\": \"John Doe\",\n            \"title\": \"Senior Software Engineer\",\n            \"profile_url\": \"https://www.linkedin.com/in/john-doe\",\n            \"page_id\": 1,\n            \"created_at\": \"2024-01-15T10:00:00Z\",\n            \"updated_at\": \"2024-01-15T10:00:00Z\"\n        },\n        {\n            \"id\": 2,\n            \"linkedin_user_id\": \"jane-smith\",\n            \"name\": \"Jane Smith\",\n            \"title\": \"Product Manager\",\n            \"profile_url\": \"https://www.linkedin.com/in/jane-smith\",\n            \"page_id\": 1,\n            \"created_at\": \"2024-01-15T10:00:00Z\",\n            \"updated_at\": \"2024-01-15T10:00:00Z\"\n        },\n        {\n            \"id\": 3,\n            \"linkedin_user_id\": \"bob-johnson\",\n            \"name\": \"Bob Johnson\",\n            \"title\": \"Data Scientist\",\n            \"profile_url\": \"https://www.linkedin.com/in/bob-johnson\",\n            \"page_id\": 1,\n            \"created_at\": \"2024-01-15T10:00:00Z\",\n            \"updated_at\": \"2024-01-15T10:00:00Z\"\n        }\n    ],\n    \"total\": 45,\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total_pages\": 3,\n    \"has_next\": true,\n    \"has_previous\": false\n}"
+						},
+						{
+							"name": "Error - Page Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/pages/non-existent/followers",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"pages",
+										"non-existent",
+										"followers"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": \"Page with page_id 'non-existent' not found\"\n}"
+						}
+					]
+				}
+			],
+			"description": "Endpoints for LinkedIn company pages"
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/health",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"health"
+					]
+				},
+				"description": "Health check endpoint to verify API is running"
+			},
+			"response": [
+				{
+					"name": "Success",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"status\": \"healthy\",\n    \"version\": \"1.0.0\"\n}"
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "page_id",
+			"value": "acme-corp",
+			"type": "string"
+		},
+		{
+			"key": "follower_min",
+			"value": "1000",
+			"type": "string"
+		},
+		{
+			"key": "follower_max",
+			"value": "100000",
+			"type": "string"
+		},
+		{
+			"key": "industry",
+			"value": "Technology",
+			"type": "string"
+		},
+		{
+			"key": "page_name",
+			"value": "Acme",
+			"type": "string"
+		}
+	]
+}
+
