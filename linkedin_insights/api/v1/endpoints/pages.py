@@ -18,23 +18,16 @@ from linkedin_insights.schemas.linkedin import (
 )
 from linkedin_insights.services.linkedin_page_service import LinkedInPageService
 from linkedin_insights.scraper.page_scraper import LinkedInPageScraper
+from linkedin_insights.utils.pagination import (
+    PaginationParams,
+    paginate_query,
+    paginate_query_with_filters,
+    get_pagination_dependency,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-def calculate_pagination(total: int, page: int, page_size: int) -> dict:
-    """Calculate pagination metadata"""
-    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
-    return {
-        'total': total,
-        'page': page,
-        'page_size': page_size,
-        'total_pages': total_pages,
-        'has_next': page < total_pages,
-        'has_previous': page > 1,
-    }
 
 
 @router.get("/{page_id}", response_model=LinkedInPageResponse, status_code=status.HTTP_200_OK)
@@ -103,8 +96,7 @@ async def get_page(
 
 @router.get("", response_model=PaginatedLinkedInPageResponse, status_code=status.HTTP_200_OK)
 def get_pages(
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    pagination: PaginationParams = Depends(get_pagination_dependency),
     follower_count_min: Optional[int] = Query(None, ge=0, description="Minimum follower count"),
     follower_count_max: Optional[int] = Query(None, ge=0, description="Maximum follower count"),
     industry: Optional[str] = Query(None, description="Filter by industry"),
@@ -120,8 +112,6 @@ def get_pages(
     - industry: Filter by industry
     - page_name: Partial match on page name
     """
-    page_repo = LinkedInPageRepository(LinkedInPage, db)
-    
     # Build query with filters
     query = db.query(LinkedInPage)
     
@@ -138,20 +128,10 @@ def get_pages(
     if page_name:
         query = query.filter(LinkedInPage.name.ilike(f"%{page_name}%"))
     
-    # Get total count
-    total = query.count()
+    # Use pagination utility
+    result = paginate_query(query, pagination.page, pagination.page_size)
     
-    # Apply pagination
-    skip = (page - 1) * page_size
-    pages = query.offset(skip).limit(page_size).all()
-    
-    # Calculate pagination metadata
-    pagination = calculate_pagination(total, page, page_size)
-    
-    return {
-        'items': pages,
-        **pagination
-    }
+    return result.to_dict()
 
 
 @router.get("/{page_id}/posts", response_model=PaginatedPostResponse, status_code=status.HTTP_200_OK)
@@ -167,7 +147,6 @@ def get_page_posts(
     Returns recent 10-15 posts (default 15) with pagination support
     """
     page_repo = LinkedInPageRepository(LinkedInPage, db)
-    post_repo = PostRepository(Post, db)
     
     # Get page by page_id
     linkedin_page = page_repo.get_by_page_id(page_id)
@@ -177,30 +156,24 @@ def get_page_posts(
             detail=f"Page with page_id '{page_id}' not found"
         )
     
-    # Get posts for this page
-    query = db.query(Post).filter(Post.page_id == linkedin_page.id).order_by(Post.posted_at.desc())
+    # Get posts for this page with ordering
+    query = db.query(Post).filter(Post.page_id == linkedin_page.id)
     
-    # Get total count
-    total = query.count()
+    # Use pagination utility with ordering
+    pagination = PaginationParams(page=page, page_size=page_size)
+    result = paginate_query_with_filters(
+        query, 
+        pagination, 
+        order_by=Post.posted_at.desc()
+    )
     
-    # Apply pagination
-    skip = (page - 1) * page_size
-    posts = query.offset(skip).limit(page_size).all()
-    
-    # Calculate pagination metadata
-    pagination = calculate_pagination(total, page, page_size)
-    
-    return {
-        'items': posts,
-        **pagination
-    }
+    return result.to_dict()
 
 
 @router.get("/{page_id}/followers", response_model=PaginatedSocialMediaUserResponse, status_code=status.HTTP_200_OK)
 def get_page_followers(
     page_id: str,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    pagination: PaginationParams = Depends(get_pagination_dependency),
     db: Session = Depends(get_db)
 ):
     """
@@ -209,7 +182,6 @@ def get_page_followers(
     Returns list of employees/followers with pagination support
     """
     page_repo = LinkedInPageRepository(LinkedInPage, db)
-    user_repo = SocialMediaUserRepository(SocialMediaUser, db)
     
     # Get page by page_id
     linkedin_page = page_repo.get_by_page_id(page_id)
@@ -222,18 +194,8 @@ def get_page_followers(
     # Get users/employees for this page
     query = db.query(SocialMediaUser).filter(SocialMediaUser.page_id == linkedin_page.id)
     
-    # Get total count
-    total = query.count()
+    # Use pagination utility
+    result = paginate_query(query, pagination.page, pagination.page_size)
     
-    # Apply pagination
-    skip = (page - 1) * page_size
-    users = query.offset(skip).limit(page_size).all()
-    
-    # Calculate pagination metadata
-    pagination = calculate_pagination(total, page, page_size)
-    
-    return {
-        'items': users,
-        **pagination
-    }
+    return result.to_dict()
 
