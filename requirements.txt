@@ -15,6 +15,10 @@ pydantic-settings==2.1.0
 httpx==0.25.2
 aiohttp==3.9.1
 
+# Web scraping
+playwright==1.40.0
+nest-asyncio==1.5.8
+
 # Utilities
 python-dotenv==1.0.0
 python-multipart==0.0.6

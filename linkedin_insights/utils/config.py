@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Scraper
     SCRAPER_TIMEOUT: int = 30
     SCRAPER_RETRY_ATTEMPTS: int = 3
+    SCRAPER_HEADLESS: bool = True
+    SCRAPER_PAGE_LOAD_TIMEOUT: int = 60000  # milliseconds
+    SCRAPER_NAVIGATION_TIMEOUT: int = 30000  # milliseconds
     
     model_config = SettingsConfigDict(
         env_file=".env",
