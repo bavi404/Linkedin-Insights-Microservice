@@ -8,6 +8,12 @@ from alembic import context
 
 from linkedin_insights.db.base import Base
 from linkedin_insights.models.insight import Insight, ScraperRun
+from linkedin_insights.models.linkedin import (
+    LinkedInPage,
+    SocialMediaUser,
+    Post,
+    Comment,
+)
 from linkedin_insights.utils.config import settings
 
 # Alembic Config object
