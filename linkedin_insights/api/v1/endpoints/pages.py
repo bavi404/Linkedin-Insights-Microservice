@@ -1,6 +1,6 @@
 """
 LinkedIn Pages endpoints
-Async endpoints for LinkedIn company pages
+Async endpoints for LinkedIn company pages with Redis caching
 """
 import logging
 from typing import Optional
@@ -25,6 +25,16 @@ from linkedin_insights.utils.pagination import (
     paginate_query_with_filters,
     get_pagination_dependency,
 )
+from linkedin_insights.utils.cache import (
+    get_cache,
+    set_cache,
+    get_cache_key_for_page,
+    get_cache_key_for_pages_list,
+    get_cache_key_for_page_posts,
+    get_cache_key_for_page_followers,
+    invalidate_page_cache,
+)
+from linkedin_insights.utils.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +49,18 @@ async def get_page(
     """
     Get LinkedIn page by page_id
     
-    - If page exists in DB → return from DB
+    - If page exists in DB → return from DB (cached for 5 minutes)
     - If not → scrape LinkedIn, store in DB, return response
+    
+    Responses are cached for 5 minutes.
     """
+    # Try to get from cache first
+    cache_key = get_cache_key_for_page(page_id)
+    cached_page = await get_cache(cache_key)
+    if cached_page is not None:
+        logger.info(f"Page {page_id} served from cache")
+        return cached_page
+    
     page_repo = LinkedInPageRepository(LinkedInPage, db)
     
     # Check if page exists in DB
@@ -49,6 +68,8 @@ async def get_page(
     
     if page:
         logger.info(f"Page {page_id} found in database")
+        # Cache the response
+        await set_cache(cache_key, page, ttl=settings.REDIS_CACHE_TTL)
         return page
     
     # Page not found, scrape it
@@ -82,6 +103,9 @@ async def get_page(
                 detail="Page was scraped but not found in database"
             )
         
+        # Cache the newly scraped page
+        await set_cache(cache_key, page, ttl=settings.REDIS_CACHE_TTL)
+        
         logger.info(f"Successfully scraped and stored page {page_id}")
         return page
     
@@ -112,7 +136,26 @@ async def get_pages(
     - follower_count_max: Maximum number of followers
     - industry: Filter by industry
     - page_name: Partial match on page name
+    
+    Responses are cached for 5 minutes.
     """
+    # Build cache key from filters
+    filters = {
+        'page': pagination.page,
+        'page_size': pagination.page_size,
+        'follower_count_min': follower_count_min,
+        'follower_count_max': follower_count_max,
+        'industry': industry,
+        'page_name': page_name,
+    }
+    cache_key = get_cache_key_for_pages_list(filters)
+    
+    # Try to get from cache
+    cached_result = await get_cache(cache_key)
+    if cached_result is not None:
+        logger.info("Pages list served from cache")
+        return cached_result
+    
     # Build query with filters
     query = select(LinkedInPage)
     
@@ -131,8 +174,12 @@ async def get_pages(
     
     # Use pagination utility
     result = await paginate_query(query, db, pagination.page, pagination.page_size)
+    response_data = result.to_dict()
     
-    return result.to_dict()
+    # Cache the response
+    await set_cache(cache_key, response_data, ttl=settings.REDIS_CACHE_TTL)
+    
+    return response_data
 
 
 @router.get("/{page_id}/posts", response_model=PaginatedPostResponse, status_code=status.HTTP_200_OK)
@@ -145,8 +192,16 @@ async def get_page_posts(
     """
     Get posts for a LinkedIn page
     
-    Returns recent 10-15 posts (default 15) with pagination support
+    Returns recent 10-15 posts (default 15) with pagination support.
+    Responses are cached for 5 minutes.
     """
+    # Try to get from cache
+    cache_key = get_cache_key_for_page_posts(page_id, page, page_size)
+    cached_result = await get_cache(cache_key)
+    if cached_result is not None:
+        logger.info(f"Page {page_id} posts served from cache")
+        return cached_result
+    
     page_repo = LinkedInPageRepository(LinkedInPage, db)
     
     # Get page by page_id
@@ -168,8 +223,12 @@ async def get_page_posts(
         pagination, 
         order_by=Post.posted_at.desc()
     )
+    response_data = result.to_dict()
     
-    return result.to_dict()
+    # Cache the response
+    await set_cache(cache_key, response_data, ttl=settings.REDIS_CACHE_TTL)
+    
+    return response_data
 
 
 @router.get("/{page_id}/followers", response_model=PaginatedSocialMediaUserResponse, status_code=status.HTTP_200_OK)
@@ -181,8 +240,16 @@ async def get_page_followers(
     """
     Get employees/followers for a LinkedIn page
     
-    Returns list of employees/followers with pagination support
+    Returns list of employees/followers with pagination support.
+    Responses are cached for 5 minutes.
     """
+    # Try to get from cache
+    cache_key = get_cache_key_for_page_followers(page_id, pagination.page, pagination.page_size)
+    cached_result = await get_cache(cache_key)
+    if cached_result is not None:
+        logger.info(f"Page {page_id} followers served from cache")
+        return cached_result
+    
     page_repo = LinkedInPageRepository(LinkedInPage, db)
     
     # Get page by page_id
@@ -198,5 +265,9 @@ async def get_page_followers(
     
     # Use pagination utility
     result = await paginate_query(query, db, pagination.page, pagination.page_size)
+    response_data = result.to_dict()
     
-    return result.to_dict()
+    # Cache the response
+    await set_cache(cache_key, response_data, ttl=settings.REDIS_CACHE_TTL)
+    
+    return response_data

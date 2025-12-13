@@ -1,28 +1,182 @@
 version: '3.8'
 
 services:
-  api:
-    build: .
+  # ==========================================================================
+  # Application Service
+  # ==========================================================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: linkedin-insights-app
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:8000"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/linkedin_insights
+      # Application
+      - APP_NAME=${APP_NAME:-linkedin_insights}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # API
+      - API_V1_PREFIX=${API_V1_PREFIX:-/api/v1}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["*"]}
+      
+      # Database
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-linkedin_insights}
+      
+      # Scraper
+      - SCRAPER_TIMEOUT=${SCRAPER_TIMEOUT:-30}
+      - SCRAPER_RETRY_ATTEMPTS=${SCRAPER_RETRY_ATTEMPTS:-3}
+      - SCRAPER_HEADLESS=${SCRAPER_HEADLESS:-true}
+      - SCRAPER_PAGE_LOAD_TIMEOUT=${SCRAPER_PAGE_LOAD_TIMEOUT:-60000}
+      - SCRAPER_NAVIGATION_TIMEOUT=${SCRAPER_NAVIGATION_TIMEOUT:-30000}
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=${REDIS_DB:-0}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-300}
+      
+      # AI Summary (Optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-300}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - linkedin-insights-network
 
+  # ==========================================================================
+  # PostgreSQL Database Service
+  # ==========================================================================
   db:
-    image: postgres:15
+    image: postgres:15-alpine
+    container_name: linkedin-insights-db
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=linkedin_insights
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-linkedin_insights}
+      - PGDATA=/var/lib/postgresql/data/pgdata
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - linkedin-insights-network
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
 
+  # ==========================================================================
+  # Redis Cache Service
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: linkedin-insights-redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass $$REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: >
+        sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+          redis-cli -a $$REDIS_PASSWORD ping;
+        else
+          redis-cli ping;
+        fi"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - linkedin-insights-network
+
+  # ==========================================================================
+  # Optional: Database Migration Service (run once)
+  # ==========================================================================
+  # Uncomment to run migrations on startup
+  # migrate:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: production
+  #   container_name: linkedin-insights-migrate
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-linkedin_insights}
+  #   command: alembic upgrade head
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   networks:
+  #     - linkedin-insights-network
+  #   profiles:
+  #     - migrate
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  linkedin-insights-network:
+    driver: bridge
+
+# ============================================================================
+# Volumes
+# ============================================================================
 volumes:
   postgres_data:
-
+    driver: local
+  redis_data:
+    driver: local

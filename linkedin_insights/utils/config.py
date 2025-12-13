@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-3.5-turbo"
     OPENAI_MAX_TOKENS: int = 300
     
+    # Redis (Optional)
+    REDIS_URL: Optional[str] = None
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: Optional[str] = None
+    REDIS_CACHE_TTL: int = 300  # 5 minutes default
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

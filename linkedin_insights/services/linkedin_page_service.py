@@ -22,6 +22,7 @@ from linkedin_insights.models.linkedin import (
     SocialMediaUser,
 )
 from linkedin_insights.services.ai_summary_service import AISummaryService
+from linkedin_insights.utils.cache import invalidate_page_cache
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,9 @@ class LinkedInPageService:
             
             # Final commit for any remaining changes
             await self.db.commit()
+            
+            # Invalidate cache for this page
+            await invalidate_page_cache(page.page_id)
             
             logger.info(
                 f"Successfully processed page {page.page_id}: "
