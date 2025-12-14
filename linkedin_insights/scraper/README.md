@@ -26,13 +26,13 @@ async def scrape_page():
     return result
 ```
 
-### Sync Usage
+### Via Service Layer
 
 ```python
-from linkedin_insights.scraper.scraper_service import ScraperService
+from linkedin_insights.services.scraper_service import ScraperService
 
 scraper = ScraperService()
-result = scraper.scrape_linkedin_page("acme-corp")
+result = await scraper.scrape_linkedin_page("acme-corp")
 ```
 
 ## Configuration

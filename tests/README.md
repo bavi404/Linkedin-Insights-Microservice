@@ -14,10 +14,8 @@ tests/
 ├── test_services/
 │   ├── test_insight_service.py   # Insight service tests
 │   └── test_scraper_service.py   # Scraper service tests (mocked)
-├── test_utils/
-│   └── test_pagination.py        # Pagination utility tests
-└── test_scraper/
-    └── test_linkedin_scraper.py  # Scraper unit tests
+└── test_utils/
+    └── test_pagination.py        # Pagination utility tests
 ```
 
 ## Running Tests
